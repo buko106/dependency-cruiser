@@ -82,13 +82,13 @@ jobs:
         run: |
           echo '## Code coverage' >> $GITHUB_STEP_SUMMARY
           node tools/istanbul-json-summary-to-markdown.mjs < coverage/coverage-summary.json >> $GITHUB_STEP_SUMMARY
-          yarn --silent depcruise --output-type markdown >> $GITHUB_STEP_SUMMARY
+          node --run depcruise -- --output-type markdown >> $GITHUB_STEP_SUMMARY
       - name: on pushes to the default branch emit graph to the step summary
         if: always() && matrix.node-version == env.NODE_LATEST && github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
         run: |
           echo '## Visual overview' >> $GITHUB_STEP_SUMMARY
           echo '```mermaid' >> $GITHUB_STEP_SUMMARY
-          yarn --silent depcruise:graph:mermaid >> $GITHUB_STEP_SUMMARY
+          node --run depcruise:graph:mermaid >> $GITHUB_STEP_SUMMARY
           echo '' >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
       - name: on pull requests emit depcruise graph to step summary with changed modules highlighted
@@ -97,11 +97,34 @@ jobs:
           echo '## Visual diff' >> $GITHUB_STEP_SUMMARY
           echo Modules changed in this PR have a fluorescent green color. All other modules in the graph are those directly or indirectly affected by changes in the green modules. >> $GITHUB_STEP_SUMMARY
           echo '```mermaid' >> $GITHUB_STEP_SUMMARY
-          SHA=${{github.event.pull_request.base.sha}} yarn --silent depcruise:graph:mermaid:diff >> $GITHUB_STEP_SUMMARY
+          SHA=${{github.event.pull_request.base.sha}} node --run depcruise:graph:mermaid:diff >> $GITHUB_STEP_SUMMARY
           echo '' >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
       - name: regular test (run on node != ${{env.NODE_LATEST}} only)
         if: matrix.node-version != env.NODE_LATEST
+        run: npm test
+
+  check-typescript-native:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{env.NODE_LATEST}}
+      - name: install & build
+        run: |
+          sudo apt-get update
+          sudo apt-get install graphviz
+          npm clean-install --legacy-peer-deps --ignore-scripts
+          git restore .npmrc
+          npm run build
+      - name: swap the classic typescript compiler for the native one
+        run: npm install --no-save --legacy-peer-deps --ignore-scripts typescript@7.1.0-beta
+      - name: test with the native typescript compiler
         run: npm test
 
   check-windows:
